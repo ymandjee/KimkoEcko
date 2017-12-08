@@ -49,22 +49,83 @@ bot.dialog('Help',
 matches: 'Help'
 });
 
-bot.dialog('Buy',
+bot.dialog('Buy', [
 (session, args, next) => {
-    var transaction = builder.EntityRecognizer.findEntity(args.intent.entities, 'transaction');
-    var portfolio = builder.EntityRecognizer.findEntity(args.intent.entities, 'portfolio');
+    var symbol = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Symbol');
+    var quantity = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Quantity');
+    var price = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Price');
+    var portfolio = builder.EntityRecognizer.findEntity(args.intent.entities, 'Portfolio');
+
+    if(symbol) {
+        session.dialogData.symbol = symbol.entity;
+    }
+
+    if(quantity) {
+        session.dialogData.quantity = quantity.entity;
+    }
+
+    if(price) {
+        session.dialogData.price = price.entity;
+    }
+
+    if(portfolio) {
+        session.dialogData.portfolio = portfolio.entity;
+    }
+
+    if(!session.dialogData.symbol){
+        builder.Prompts.text(session, 'What is the symbol of the stock you want to buy ? ');
+    } else {
+        next();
+    }
+}, (session, result, next) => {
+    if (!session.dialogData.symbol) {
+        session.dialogData.symbol = result.response;
+    }
+
+    if(!session.dialogData.quantity){
+        builder.Prompts.number(session, 'How many stocks did you buy ? ');
+    } else {
+        next();
+    }
+}, (session, result, next) => {
+    if (!session.dialogData.quantity) {
+        session.dialogData.quantity = result.response;
+    }
+
+    if(!session.dialogData.price){
+        builder.Prompts.number(session, 'At what price did you buy each ? ');
+    } else {
+        next();
+    }
+}, (session, result, next) => {
+    if (!session.dialogData.price) {
+        session.dialogData.price = result.response;
+    }
+
+    if(!session.dialogData.portfolio){
+        builder.Prompts.choice(session, 'In which portfolio should I include the trade ? ', ["TFSA", "RRSP", "Other"]);
+    } else {
+        next();
+    }
+},
+(session, result, next) => {
+    
+    if (!session.dialogData.portfolio) {
+        session.dialogData.portfolio = result.response.entity;
+    }
+
     var message = `I understand that you want to register the following transaction : `;
-    message+= '\nAction : Buy';
-    message+= '\nStock : ' + transaction.symbol;
-    message+= '\nQuantity : ' + transaction.quantity;
-    message+= '\nPrice : ' + transaction.price;
-    message+= '\nPortfolio : ' + portfolio;
+    message+= '  \nAction : Buy';
+    message+= '  \nStock : ' + session.dialogData.symbol;
+    message+= '  \nQuantity : ' + session.dialogData.quantity;
+    message+= '  \nPrice : ' + session.dialogData.price;
+    message+= '  \nPortfolio : ' + session.dialogData.portfolio;
 
     if(session.userData.first_name && session.userData.last_name)
     {
-        message += '\nOwner : ' + session.userData.first_name + ' ' + session.userData.last_name;
+        message += '  \nOwner : ' + session.userData.first_name + ' ' + session.userData.last_name;
     }
-    message+= '\nIs that correct ?'
+    message+= '  \n\nIs that correct ?'
     builder.Prompts.confirm(session, message, { listStyle: builder.ListStyle.button });
 },
 (session, result, next) => {
@@ -76,6 +137,6 @@ bot.dialog('Buy',
     }
 
 }
-).triggerAction({
+]).triggerAction({
 matches: 'Buy'
 });
