@@ -37,7 +37,7 @@ bot.use(
 bot.dialog('Help',
 (session, args, next) => {
     var message = `I'm the finance bot and I can help you manage your portfolio.\n` +
-    `You can tell me things like _Show me my portfolio_ or _I just bought some stocks_.`;
+    `You can tell me things like _Buy 50 xef.to @ 100$ into my TFSA_.`;
     if(session.userData.first_name && session.userData.last_name)
     {
         message = 'Hi ' + session.userData.first_name + ' ' + session.userData.last_name + '! ' + message;
