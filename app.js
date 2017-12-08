@@ -48,3 +48,34 @@ bot.dialog('Help',
 ).triggerAction({
 matches: 'Help'
 });
+
+bot.dialog('Buy',
+(session, args, next) => {
+    var transaction = builder.EntityRecognizer.findEntity(args.intent.entities, 'transaction');
+    var transaction = builder.EntityRecognizer.findEntity(args.intent.entities, 'portfolio');
+    var message = `I understand that you want to register the following transaction : `;
+    message+= '\nAction : Buy';
+    message+= '\nStock : ' + transaction.symbol;
+    message+= '\nQuantity : ' + transaction.quantity;
+    message+= '\nPrice : ' + transaction.price;
+    message+= '\nPortfolio : ' + portfolio;
+
+    if(session.userData.first_name && session.userData.last_name)
+    {
+        message += '\nOwner : ' + session.userData.first_name + ' ' + session.userData.last_name;
+    }
+    message+= '\nIs that correct ?'
+    builder.Prompts.confirm(session, message, { listStyle: builder.ListStyle.button });
+},
+(session, result, next) => {
+    if (result.response) {
+        session.endDialog("confirmed");
+    }
+    else{
+        session.endDialog("cancelled");
+    }
+
+}
+).triggerAction({
+matches: 'Help'
+});
