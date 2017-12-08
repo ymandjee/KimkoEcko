@@ -2,15 +2,13 @@
 require('dotenv').config();
 const restify = require('restify');
 const builder = require('botbuilder');
+const fbuser = require('botbuilder-facebookextension');
 
 // Setup Restify Server
 var server = restify.createServer();
 server.listen(process.env.port || process.env.PORT || 3978, () => {
     console.log('%s listening to %s', server.name, server.url);
 });
-
-//Import bot dependencies
-import { RetrieveUserProfile } from 'botbuilder-facebookextension';
 
 // Create chat connector for communicating with the Bot Framework Service
 var connector = new builder.ChatConnector({
@@ -29,7 +27,7 @@ var bot = new builder.UniversalBot(connector, [
 ]);
 
 bot.use(  
-    RetrieveUserProfile({
+    fbuser.RetrieveUserProfile({
         accessToken: process.env.FacebookAccessToken,
     })
 );
