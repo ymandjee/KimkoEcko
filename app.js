@@ -19,16 +19,32 @@ var connector = new builder.ChatConnector({
 // Listen for messages from users
 server.post('/api/messages', connector.listen());
 
-// Receive messages from the user and respond by echoing each message back (prefixed with 'You said:')
-var bot = new builder.UniversalBot(connector, [
-    (session, args, next) => {
-        session.send('Hi ' + session.userData.first_name + ' ' + session.userData.last_name + '! ' + 
-        'You said: ' + session.message.text + ' which was ' + session.message.text.length + ' characters');
-    }
-]);
+var bot = new builder.UniversalBot(connector, (session, args, next) => {
+    session.endDialog(`I'm sorry, I did not understand '${session.message.text}'.\nType 'help' to know more about me :)`);
+});
 
+var luisRecognizer = new builder.LuisRecognizer(process.env.LUIS_MODEL_URL).onEnabled(function (context, callback) {
+    var enabled = context.dialogStack().length === 0;
+    callback(null, enabled);
+});
+bot.recognizer(luisRecognizer);
 bot.use(  
     fbuser.RetrieveUserProfile({
         accessToken: process.env.FacebookAccessToken,
     })
 );
+
+bot.dialog('Help',
+(session, args, next) => {
+    var message = `I'm the finance bot and I can help you manage your portfolio.\n` +
+    `You can tell me things like _Show me my portfolio_ or _I just bought some stocks_.`;
+    if(session.userData.first_name && session.userData.last_name)
+    {
+        message = 'Hi ' + session.userData.first_name + ' ' + session.userData.last_name + '! ' + message;
+    }
+    session.endDialog(message);
+    session.send('What would you like me to do?.');
+}
+).triggerAction({
+matches: 'Help'
+});
