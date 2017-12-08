@@ -52,7 +52,7 @@ matches: 'Help'
 bot.dialog('Buy',
 (session, args, next) => {
     var transaction = builder.EntityRecognizer.findEntity(args.intent.entities, 'transaction');
-    var transaction = builder.EntityRecognizer.findEntity(args.intent.entities, 'portfolio');
+    var portfolio = builder.EntityRecognizer.findEntity(args.intent.entities, 'portfolio');
     var message = `I understand that you want to register the following transaction : `;
     message+= '\nAction : Buy';
     message+= '\nStock : ' + transaction.symbol;
