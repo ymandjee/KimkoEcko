@@ -77,5 +77,5 @@ bot.dialog('Buy',
 
 }
 ).triggerAction({
-matches: 'Help'
+matches: 'Buy'
 });
