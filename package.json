@@ -12,6 +12,7 @@
     "botbuilder": "^3.8.4",
     "botbuilder-facebookextension": "^1.2.4",
     "dotenv": "^4.0.0",
+    "mongodb": "^2.2.33",
     "restify": "^4.3.0"
   },
   "devDependencies": {
