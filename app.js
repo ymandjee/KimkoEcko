@@ -51,10 +51,10 @@ bot.use(
 bot.dialog('Help',
     (session, args, next) => {
         var message = `I'm the finance bot and I can help you manage your portfolio.  \n` +
-            'You can tell me things like :  \n' + 
-            ' _Buy 50 xef.to @ 100$ into my TFSA_.  \n' + 
-            ' _Sell all my xef.to at market price_.  \n' + 
-            ' _List my stocks_.  \n' + 
+            'You can tell me things like :  \n' +
+            ' _Buy 50 xef.to @ 100$ into my TFSA_.  \n' +
+            ' _Sell all my xef.to at market price_.  \n' +
+            ' _List my stocks_.  \n' +
             'At any time, type _cancel_ to exit the current dialog';
         if (session.userData.first_name && session.userData.last_name) {
             message = 'Hi ' + session.userData.first_name + ' ' + session.userData.last_name + '! ' + message;
@@ -68,27 +68,7 @@ bot.dialog('Help',
 
 bot.dialog('Buy', [
     (session, args, next) => {
-        var symbol = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Symbol');
-        var quantity = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Quantity');
-        var price = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Price');
-        var portfolio = builder.EntityRecognizer.findEntity(args.intent.entities, 'Portfolio');
-
-        if (symbol) {
-            session.dialogData.symbol = symbol.entity;
-        }
-
-        if (quantity) {
-            session.dialogData.quantity = quantity.entity;
-        }
-
-        if (price) {
-            session.dialogData.price = price.entity;
-        }
-
-        if (portfolio) {
-            session.dialogData.portfolio = portfolio.entity;
-        }
-
+        processMessage(session, args);
         if (!session.dialogData.symbol) {
             builder.Prompts.text(session, 'What is the symbol of the stock you want to buy ? ');
         } else {
@@ -148,10 +128,10 @@ bot.dialog('Buy', [
         if (result.response) {
             var myobj = {
                 action: 'Buy',
-                stock: session.dialogData.symbol,
-                quantity: session.dialogData.quantity,
-                price: session.dialogData.price,
-                portfolio: session.dialogData.portfolio
+                stock: session.dialogData.symbol.toLowerCase().replace(/\s/g,''),
+                quantity: parseInt(session.dialogData.quantity),
+                price: parseInt(session.dialogData.price),
+                portfolio: session.dialogData.portfolio.toLowerCase()
             };
             MongoClient.connect(process.env.MONGODB_CONN_STRING, function (err, db) {
                 if (err) throw err;
@@ -175,12 +155,123 @@ bot.dialog('Buy', [
     confirmPrompt: `Are you sure you wish to cancel?`
 });
 
-bot.dialog('Sell',
-(session, args, next) => {
-    session.endDialog("Sell available soon!");
-}
-).triggerAction({
-matches: 'Sell'
+bot.dialog('Sell', [
+    (session, args, next) => {
+        processMessage(session, args);
+        if (!session.dialogData.symbol) {
+            builder.Prompts.text(session, 'What is the symbol of the stock you want to sell ? ');
+        } else {
+            next();
+        }
+    }, (session, result, next) => {
+        if (!session.dialogData.symbol) {
+            session.dialogData.symbol = result.response;
+        }
+
+        if (!session.dialogData.quantity) {
+            builder.Prompts.number(session, 'How many stocks do you want to sell ? ');
+        } else {
+            next();
+        }
+    }, (session, result, next) => {
+        if (!session.dialogData.quantity) {
+            session.dialogData.quantity = result.response;
+        }
+
+        if (!session.dialogData.price) {
+            builder.Prompts.number(session, 'At what price should I target the sell ? ');
+        } else {
+            next();
+        }
+    }, (session, result, next) => {
+        if (!session.dialogData.price) {
+            session.dialogData.price = result.response;
+        }
+
+        if (!session.dialogData.portfolio) {
+            builder.Prompts.choice(session, 'In which portfolio should I include the trade ? ', ["TFSA", "RRSP", "Other"]);
+        } else {
+            next();
+        }
+    },
+    (session, result, next) => {
+
+        if (!session.dialogData.portfolio) {
+            session.dialogData.portfolio = result.response.entity;
+        }
+
+        var message = `I understand that you want to register the following transaction : `;
+        message += '  \nAction : Sell';
+        message += '  \nStock : ' + session.dialogData.symbol;
+        message += '  \nQuantity : ' + session.dialogData.quantity;
+        message += '  \nPrice : ' + session.dialogData.price;
+        message += '  \nPortfolio : ' + session.dialogData.portfolio;
+
+        if (session.userData.first_name && session.userData.last_name) {
+            message += '  \nOwner : ' + session.userData.first_name + ' ' + session.userData.last_name;
+        }
+        message += '  \n\nIs that correct ?'
+        builder.Prompts.confirm(session, message, { listStyle: builder.ListStyle.button });
+    },
+    (session, result, next) => {
+        if (result.response) {
+            var query = { stock: session.dialogData.symbol.toLowerCase().replace(/\s/g,''), portfolio: session.dialogData.portfolio.toLowerCase() };
+            MongoClient.connect(process.env.MONGODB_CONN_STRING, function (err, db) {
+                if (err) throw err;
+                db.collection(collName).find(query).toArray(function (err, res) {
+                    if (err) throw err;
+                    if (res) {
+                        var remainingQt = parseInt(session.dialogData.quantity);
+                        var totalPrice = 0;
+                        var totalQt = 0;
+                        var sellOrders = [];
+
+                        res.forEach(function (element) {
+                            if (remainingQt > 0 && element.quantity <= remainingQt) {
+                                remainingQt -= element.quantity;
+                                totalQt = element.quantity;
+                                totalPrice += (element.price * element.quantity);
+                                sellOrders.push(element);
+                            }
+                        }, this);
+
+                        if (sellOrders.length > 0) {
+                            var ids = [];
+                            sellOrders.forEach(function (element) {
+                                ids.push(element._id);
+                            }, this);
+                            var filter = { '_id': { '$in': ids } }
+
+
+                            db.collection(collName).deleteMany(filter, function (err, obj) {
+                                if (err) throw err;
+                                console.log(obj.result.n + " document(s) deleted");
+                                db.close();
+
+                                var expectedSellValue = totalQt * parseInt(session.dialogData.price);
+                                var pl = expectedSellValue - totalPrice;
+                                session.endDialog("I just sold %d %s for a total value of %d (P\&L : %d). Cheers!", totalQt, sellOrders[0].stock, expectedSellValue, pl);
+                            });
+
+                        } else {
+                            db.close();
+                            session.endDialog("I am unable to process the sell order.");
+                        }
+
+                    } else {
+                        db.close();
+                        session.endDialog("I did not find any %s stocks in your %s", query.stock, query.portfolio);
+                    }
+                });
+            });
+        }
+        else {
+            session.endDialog("cancelled");
+        }
+
+    }
+]).triggerAction({
+    matches: 'Sell'
 });
 
 bot.dialog('List',
@@ -192,7 +283,7 @@ bot.dialog('List',
                 db.close();
 
                 var message = "";
-                if (res) {
+                if (res.length > 0) {
                     res.forEach(function (element) {
                         message += element.action + ' ' + element.quantity + ' ' + element.stock + ' @ ' + element.price + ' into ' + element.portfolio + "  \n";
                     }, this);
@@ -207,3 +298,26 @@ bot.dialog('List',
 ).triggerAction({
     matches: 'List'
 });
+
+var processMessage = function (session, args) {
+    var symbol = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Symbol');
+    var quantity = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Quantity');
+    var price = builder.EntityRecognizer.findEntity(args.intent.entities, 'Transaction::Price');
+    var portfolio = builder.EntityRecognizer.findEntity(args.intent.entities, 'Portfolio');
+
+    if (symbol) {
+        session.dialogData.symbol = symbol.entity;
+    }
+
+    if (quantity) {
+        session.dialogData.quantity = quantity.entity;
+    }
+
+    if (price) {
+        session.dialogData.price = price.entity;
+    }
+
+    if (portfolio) {
+        session.dialogData.portfolio = portfolio.entity;
+    }
+}
