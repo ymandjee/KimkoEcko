@@ -272,6 +272,9 @@ bot.dialog('Sell', [
     }
 ]).triggerAction({
     matches: 'Sell'
+}).endConversationAction('CancelBuy', 'Operation cancelled', {
+    matches: /^cancel$/,
+    confirmPrompt: `Are you sure you wish to cancel?`
 });
 
 bot.dialog('List',
