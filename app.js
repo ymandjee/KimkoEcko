@@ -45,6 +45,10 @@ var luisRecognizer = new builder.LuisRecognizer(process.env.LUIS_MODEL_URL).onEn
 });
 bot.recognizer(luisRecognizer);
 
+console.log(process.env.BOT_AUTH_SECRET);
+console.log(process.env.FB_APP_ID);
+console.log(process.env.FB_APP_SECRET);
+
 //Create Bot Auth
 var auth = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : process.env.BOT_AUTH_SECRET })
 .provider("facebook", (options) => { 
