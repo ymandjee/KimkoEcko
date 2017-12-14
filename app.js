@@ -51,20 +51,20 @@ var luisRecognizer = new builder.LuisRecognizer(process.env.LUIS_MODEL_URL).onEn
 bot.recognizer(luisRecognizer);
 
 //Create Bot Auth
-var ba = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : "mysupersecret" })
-.provider("facebook", (options) => { 
-    return new FacebookStrategy({
-        clientID : process.env.FB_APP_ID,
-        clientSecret : process.env.FB_APP_SECRET,
-        callbackURL : options.callbackURL
-    }, (accessToken, refreshToken, profile, done) => {
-        profile = profile || {};
-        profile.accessToken = accessToken;
-        profile.refreshToken = refreshToken;
-        
-        return done(null, profile);
+var ba = new botauth.BotAuthenticator(server, bot, { baseUrl: "https://kimkoecko.azurewebsites.net", secret: "mysupersecret" })
+    .provider("facebook", (options) => {
+        return new FacebookStrategy({
+            clientID: process.env.FB_APP_ID,
+            clientSecret: process.env.FB_APP_SECRET,
+            callbackURL: options.callbackURL
+        }, (accessToken, refreshToken, profile, done) => {
+            profile = profile || {};
+            profile.accessToken = accessToken;
+            profile.refreshToken = refreshToken;
+
+            return done(null, profile);
+        });
     });
-});
 
 bot.dialog('Help',
     (session, args, next) => {
@@ -86,11 +86,15 @@ bot.dialog('Help',
 
 bot.dialog('Buy', [
     (session, args, next) => {
-        processMessage(session, args);
-        if (!session.dialogData.symbol) {
-            builder.Prompts.text(session, 'What is the symbol of the stock you want to buy ? ');
+        if (session.userData.id) {
+            processMessage(session, args);
+            if (!session.dialogData.symbol) {
+                builder.Prompts.text(session, 'What is the symbol of the stock you want to buy ? ');
+            } else {
+                next();
+            }
         } else {
-            next();
+            session.endDialog("You need to be logged in in order to buy stocks");
         }
     }, (session, result, next) => {
         if (!session.dialogData.symbol) {
@@ -145,8 +149,9 @@ bot.dialog('Buy', [
     (session, result, next) => {
         if (result.response) {
             var myobj = {
+                userid: session.userData.id,
                 action: 'Buy',
-                stock: session.dialogData.symbol.toLowerCase().replace(/\s/g,''),
+                stock: session.dialogData.symbol.toLowerCase().replace(/\s/g, ''),
                 quantity: parseInt(session.dialogData.quantity),
                 price: parseInt(session.dialogData.price),
                 portfolio: session.dialogData.portfolio.toLowerCase()
@@ -175,11 +180,15 @@ bot.dialog('Buy', [
 
 bot.dialog('Sell', [
     (session, args, next) => {
-        processMessage(session, args);
-        if (!session.dialogData.symbol) {
-            builder.Prompts.text(session, 'What is the symbol of the stock you want to sell ? ');
+        if (session.userData.id) {
+            processMessage(session, args);
+            if (!session.dialogData.symbol) {
+                builder.Prompts.text(session, 'What is the symbol of the stock you want to sell ? ');
+            } else {
+                next();
+            }
         } else {
-            next();
+            session.endDialog("You need to login in order to sell stocks");
         }
     }, (session, result, next) => {
         if (!session.dialogData.symbol) {
@@ -233,7 +242,11 @@ bot.dialog('Sell', [
     },
     (session, result, next) => {
         if (result.response) {
-            var query = { stock: session.dialogData.symbol.toLowerCase().replace(/\s/g,''), portfolio: session.dialogData.portfolio.toLowerCase() };
+            var query = {
+                userid: session.userData.id,
+                stock: session.dialogData.symbol.toLowerCase().replace(/\s/g, ''),
+                portfolio: session.dialogData.portfolio.toLowerCase(),
+            };
             MongoClient.connect(process.env.MONGODB_CONN_STRING, function (err, db) {
                 if (err) throw err;
                 db.collection(collName).find(query).toArray(function (err, res) {
@@ -297,32 +310,36 @@ bot.dialog('Sell', [
 
 bot.dialog('List',
     (session, args, next) => {
-        MongoClient.connect(process.env.MONGODB_CONN_STRING, function (err, db) {
-            if (err) throw err;
-            db.collection(collName).find({}).toArray(function (err, res) {
+        if (session.userData.id) {
+            MongoClient.connect(process.env.MONGODB_CONN_STRING, function (err, db) {
                 if (err) throw err;
-                db.close();
+                db.collection(collName).find({userid: session.userData.id}).toArray(function (err, res) {
+                    if (err) throw err;
+                    db.close();
 
-                var message = "";
-                if (res.length > 0) {
-                    res.forEach(function (element) {
-                        message += element.action + ' ' + element.quantity + ' ' + element.stock + ' @ ' + element.price + ' into ' + element.portfolio + "  \n";
-                    }, this);
-                }
-                else {
-                    message = "You have no transactions recorded";
-                }
-                session.endDialog(message);
+                    var message = "";
+                    if (res.length > 0) {
+                        res.forEach(function (element) {
+                            message += element.action + ' ' + element.quantity + ' ' + element.stock + ' @ ' + element.price + ' into ' + element.portfolio + "  \n";
+                        }, this);
+                    }
+                    else {
+                        message = "You have no transactions recorded";
+                    }
+                    session.endDialog(message);
+                });
             });
-        });
+        } else {
+            session.endDialog("You need to login in order to view your stocks");
+        }
     }
 ).triggerAction({
     matches: 'List'
 });
 
-bot.dialog("Login", [].concat( 
+bot.dialog("Login", [].concat(
     ba.authenticate("facebook"),
-    function(session, results) {
+    function (session, results) {
         //get the facebook profile
         var user = ba.profile(session, "facebook");
         console.log(user);
@@ -330,24 +347,25 @@ bot.dialog("Login", [].concat(
         //call facebook and get something using user.accessToken 
         var client = restify.createJsonClient({
             url: 'https://graph.facebook.com',
-            accept : 'application/json',
-            headers : {
-                "Authorization" : `OAuth ${ user.accessToken }`
+            accept: 'application/json',
+            headers: {
+                "Authorization": `OAuth ${user.accessToken}`
             }
         });
 
         client.get(`/v2.8/me/picture?redirect=0`, (err, req, res, obj) => {
-            if(!err) {
+            if (!err) {
                 session.userData.displayName = user.displayName;
+                session.userData.id = user.id;
                 var msg = new builder.Message()
                     .attachments([
                         new builder.HeroCard(session)
                             .text(user.displayName)
                             .images([
                                 new builder.CardImage(session).url(obj.data.url)
-                                ]
+                            ]
                             )
-                        ]
+                    ]
                     );
                 session.endDialog(msg);
             } else {
@@ -362,9 +380,9 @@ bot.dialog("Login", [].concat(
 
 bot.dialog("Logout", [
     (session, args, next) => {
-        builder.Prompts.confirm(session, "are you sure you want to logout");        
+        builder.Prompts.confirm(session, "are you sure you want to logout");
     }, (session, args) => {
-        if(args.response) {
+        if (args.response) {
             ba.logout(session, "facebook");
             session.endDialog("you've been logged out.");
         } else {
