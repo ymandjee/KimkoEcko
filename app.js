@@ -10,6 +10,8 @@ var collName = 'transactions';
 
 // Setup Restify Server
 var server = restify.createServer();
+server.use(restify.bodyParser());
+server.use(restify.queryParser());
 server.listen(process.env.port || process.env.PORT || 3978, () => {
     console.log('%s listening to %s', server.name, server.url);
 });
@@ -49,12 +51,8 @@ var luisRecognizer = new builder.LuisRecognizer(process.env.LUIS_MODEL_URL).onEn
 bot.recognizer(luisRecognizer);
 
 //Create Bot Auth
-var auth = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : "mysupersecret" })
+var ba = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : "mysupersecret" })
 .provider("facebook", (options) => { 
-    console.log("facebook provider requested");
-    console.log(process.env.FB_APP_ID);
-    console.log(process.env.FB_APP_SECRET);
-    console.log(options.callbackURL);
     return new FacebookStrategy({
         clientID : process.env.FB_APP_ID,
         clientSecret : process.env.FB_APP_SECRET,
@@ -323,10 +321,10 @@ bot.dialog('List',
 });
 
 bot.dialog("Login", [].concat( 
-    auth.authenticate("facebook"),
+    ba.authenticate("facebook"),
     function(session, results) {
         //get the facebook profile
-        var user = auth.profile(session, "facebook");
+        var user = ba.profile(session, "facebook");
         //var user = results.response;
 
         //call facebook and get something using user.accessToken 
@@ -367,7 +365,7 @@ bot.dialog("Logout", [
         builder.Prompts.confirm(session, "are you sure you want to logout");        
     }, (session, args) => {
         if(args.response) {
-            auth.logout(session, "facebook");
+            ba.logout(session, "facebook");
             session.endDialog("you've been logged out.");
         } else {
             session.endDialog("you're still logged in");
