@@ -2,7 +2,9 @@
 require('dotenv').config();
 const restify = require('restify');
 const builder = require('botbuilder');
-const fbuser = require('botbuilder-facebookextension');
+const botauth = require("botauth");
+const passport = require("passport");
+const FacebookStrategy = require("passport-facebook").Strategy;
 var MongoClient = require('mongodb').MongoClient;
 var collName = 'transactions';
 
@@ -42,11 +44,22 @@ var luisRecognizer = new builder.LuisRecognizer(process.env.LUIS_MODEL_URL).onEn
     callback(null, enabled);
 });
 bot.recognizer(luisRecognizer);
-bot.use(
-    fbuser.RetrieveUserProfile({
-        accessToken: process.env.FacebookAccessToken,
-    })
-);
+
+//Create Bot Auth
+var auth = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : process.env.BOT_AUTH_SECRET })
+.provider("facebook", (options) => { 
+    return new FacebookStrategy({
+        clientID : process.env.FB_APP_ID,
+        clientSecret : process.env.FB_APP_SECRET,
+        callbackURL : options.callbackURL
+    }, (accessToken, refreshToken, profile, done) => {
+        profile = profile || {};
+        profile.accessToken = accessToken;
+        profile.refreshToken = refreshToken;
+        
+        return done(null, profile);
+    });
+});
 
 bot.dialog('Help',
     (session, args, next) => {
@@ -300,6 +313,61 @@ bot.dialog('List',
     }
 ).triggerAction({
     matches: 'List'
+});
+
+bot.dialog("Login", [].concat( 
+    auth.authenticate("facebook"),
+    function(session, results) {
+        //get the facebook profile
+        var user = auth.profile(session, "facebook");
+        //var user = results.response;
+
+        //call facebook and get something using user.accessToken 
+        var client = restify.createJsonClient({
+            url: 'https://graph.facebook.com',
+            accept : 'application/json',
+            headers : {
+                "Authorization" : `OAuth ${ user.accessToken }`
+            }
+        });
+
+        client.get(`/v2.8/me/picture?redirect=0`, (err, req, res, obj) => {
+            if(!err) {
+                console.log(obj);
+                var msg = new builder.Message()
+                    .attachments([
+                        new builder.HeroCard(session)
+                            .text(user.displayName)
+                            .images([
+                                new builder.CardImage(session).url(obj.data.url)
+                                ]
+                            )
+                        ]
+                    );
+                session.endDialog(msg);
+            } else {
+                console.log(err);
+                session.endDialog("error getting profile");
+            }
+        });
+    }
+)).triggerAction({
+    matches: 'Login'
+});
+
+bot.dialog("Logout", [
+    (session, args, next) => {
+        builder.Prompts.confirm(session, "are you sure you want to logout");        
+    }, (session, args) => {
+        if(args.response) {
+            auth.logout(session, "facebook");
+            session.endDialog("you've been logged out.");
+        } else {
+            session.endDialog("you're still logged in");
+        }
+    }
+]).triggerAction({
+    matches: 'Logout'
 });
 
 var processMessage = function (session, args) {
