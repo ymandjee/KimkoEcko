@@ -74,8 +74,8 @@ bot.dialog('Help',
             ' _Sell all my xef.to at market price_.  \n' +
             ' _List my stocks_.  \n' +
             'At any time, type _cancel_ to exit the current dialog';
-        if (session.userData.first_name && session.userData.last_name) {
-            message = 'Hi ' + session.userData.first_name + ' ' + session.userData.last_name + '! ' + message;
+        if (session.userData.displayName) {
+            message = 'Hi ' + session.userData.displayName + '! ' + message;
         }
         session.endDialog(message);
         session.send('What would you like me to do?');
@@ -136,8 +136,8 @@ bot.dialog('Buy', [
         message += '  \nPrice : ' + session.dialogData.price;
         message += '  \nPortfolio : ' + session.dialogData.portfolio;
 
-        if (session.userData.first_name && session.userData.last_name) {
-            message += '  \nOwner : ' + session.userData.first_name + ' ' + session.userData.last_name;
+        if (session.userData.displayName) {
+            message += '  \nOwner : ' + session.userData.displayName;
         }
         message += '  \n\nIs that correct ?'
         builder.Prompts.confirm(session, message, { listStyle: builder.ListStyle.button });
@@ -225,8 +225,8 @@ bot.dialog('Sell', [
         message += '  \nPrice : ' + session.dialogData.price;
         message += '  \nPortfolio : ' + session.dialogData.portfolio;
 
-        if (session.userData.first_name && session.userData.last_name) {
-            message += '  \nOwner : ' + session.userData.first_name + ' ' + session.userData.last_name;
+        if (session.userData.displayName) {
+            message += '  \nOwner : ' + session.userData.displayName;
         }
         message += '  \n\nIs that correct ?'
         builder.Prompts.confirm(session, message, { listStyle: builder.ListStyle.button });
@@ -325,7 +325,7 @@ bot.dialog("Login", [].concat(
     function(session, results) {
         //get the facebook profile
         var user = ba.profile(session, "facebook");
-        //var user = results.response;
+        console.log(user);
 
         //call facebook and get something using user.accessToken 
         var client = restify.createJsonClient({
@@ -338,7 +338,7 @@ bot.dialog("Login", [].concat(
 
         client.get(`/v2.8/me/picture?redirect=0`, (err, req, res, obj) => {
             if(!err) {
-                console.log(obj);
+                session.userData.displayName = user.displayName;
                 var msg = new builder.Message()
                     .attachments([
                         new builder.HeroCard(session)
