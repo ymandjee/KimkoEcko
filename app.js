@@ -384,6 +384,8 @@ bot.dialog("Logout", [
     }, (session, args) => {
         if (args.response) {
             ba.logout(session, "facebook");
+            session.userData.id = null;
+            session.userData.displayName = null;
             session.endDialog("you've been logged out.");
         } else {
             session.endDialog("you're still logged in");
