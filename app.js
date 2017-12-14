@@ -65,6 +65,15 @@ var auth = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoe
     });
 });
 
+/**
+ * Just a page to make sure the server is running
+ */
+server.get("/", (req, res) => {
+    res.send("facebook");
+});
+
+
+
 bot.dialog('Help',
     (session, args, next) => {
         var message = `I'm the finance bot and I can help you manage your portfolio.  \n` +
