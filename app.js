@@ -49,7 +49,7 @@ var luisRecognizer = new builder.LuisRecognizer(process.env.LUIS_MODEL_URL).onEn
 bot.recognizer(luisRecognizer);
 
 //Create Bot Auth
-var auth = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : process.env.BOT_AUTH_SECRET })
+var auth = new botauth.BotAuthenticator(server, bot, { baseUrl : "https://kimkoecko.azurewebsites.net", secret : "mysupersecret" })
 .provider("facebook", (options) => { 
     console.log("facebook provider requested");
     console.log(process.env.FB_APP_ID);
